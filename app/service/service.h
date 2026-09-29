@@ -13,6 +13,7 @@
 #include "api/types.h"
 #include "api/app_hook.h"
 #include "uinput_output.h"
+#include "dedicated_adapter.h"
 
 class Service : public QObject, protected QDBusContext {
     Q_OBJECT
@@ -33,6 +34,9 @@ public slots:
     void PairWithCountry(const QString& interface, const QString& code, const QString& mode, const QString& regulatoryCountry);
     void StopSession();
     void PrepareSystem();
+    QVariantMap DedicatedAdapterStatus(const QString& interface);
+    void CreateDedicatedAdapter(const QString& interface);
+    void UndoDedicatedAdapter();
 private:
     using Completion = std::function<void(QString)>;
     std::vector<barista::api::GamePad> GamePads() const;
@@ -55,6 +59,8 @@ private:
     QString BuildSupportReport() const;
     QStringList SupportLogFiles() const;
     void PruneSupportLogs();
+    QString EnterDedicatedNamespace(const QString& interface);
+    void LeaveDedicatedNamespace();
     QProcess m_worker;
     QLocalSocket m_statusSocket;
     QTimer m_poll, m_inputTimer, m_statusTimeout;
@@ -74,4 +80,7 @@ private:
     int m_battery = 0;
     std::unique_ptr<barista::api::AppHook> m_input;
     barista::UinputOutput m_controller;
+    barista::linux_service::DedicatedAdapterManager m_dedicatedAdapters;
+    QString m_networkNamespace;
+    bool m_dedicatedSession = false;
 };

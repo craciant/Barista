@@ -19,6 +19,9 @@ public:
     void RefreshDiagnostics();
     void RenameGamePad(const barista::api::RenameGamePadRequest& request);
     void RemoveGamePad(const barista::api::RemoveGamePadRequest& request);
+    void RefreshDedicatedAdapter(const QString& interfaceName);
+    void CreateDedicatedAdapter(const QString& interfaceName);
+    void UndoDedicatedAdapter();
 signals:
     void Status(const barista::api::SessionStatus& status);
     void GamePads(const std::vector<barista::api::GamePad>& gamePads);
@@ -26,9 +29,11 @@ signals:
     void Pending(bool pending);
     void Stopped(bool success);
     void Diagnostics(const QString& report, const QString& directory, const QStringList& files, const QString& sessionId);
+    void DedicatedAdapter(bool configured, bool selected, bool present, bool active);
 private:
     void Call(const QString& method, const QVariantList& arguments = {});
     bool m_pollPending = false, m_operationPending = false;
     bool m_stopAfterOperation = false;
     qint64 m_nextRetry = 0;
+    QString m_dedicatedInterface;
 };

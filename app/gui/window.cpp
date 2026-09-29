@@ -501,6 +501,16 @@ Window::Window(bool smokeTest)
             m_interface->addItem(AdapterLabel(interface.name()),interface.name());
     if (!m_interface->count()) m_interface->addItem("wlan0","wlan0");
     settingsForm->addRow("GamePad &adapter:",m_interface);
+    auto* dedicatedRow = new QWidget(settingsPage);
+    auto* dedicatedLayout = new QHBoxLayout(dedicatedRow);
+    dedicatedLayout->setContentsMargins(0,0,0,0);
+    m_dedicatedState = FormHint("Available for normal desktop use", dedicatedRow);
+    m_dedicatedState->setObjectName("dedicatedAdapterState");
+    m_dedicatedAdapter = new QPushButton("Create dedicated adapter", dedicatedRow);
+    m_dedicatedAdapter->setObjectName("dedicatedAdapterButton");
+    dedicatedLayout->addWidget(m_dedicatedState, 1);
+    dedicatedLayout->addWidget(m_dedicatedAdapter);
+    settingsForm->addRow("Adapter use:", dedicatedRow);
     m_country = new QLineEdit(settingsPage);
     m_country->setObjectName("regulatoryCountry");
     m_country->setMaxLength(2);
@@ -971,6 +981,33 @@ Window::Window(bool smokeTest)
     connect(m_mode,qOverload<int>(&QComboBox::currentIndexChanged),this,[describe](int) { describe(); });
     connect(m_interface,&QComboBox::currentTextChanged,this,[this] {
         ApplyStatus(m_lastStatus);
+        if (!m_smokeTest) m_client.RefreshDedicatedAdapter(InterfaceName(m_interface));
+    });
+    connect(m_dedicatedAdapter, &QPushButton::clicked, this, [this] {
+        if (m_selectedAdapterDedicated)
+        {
+            if (QMessageBox::question(this, "Undo dedicated adapter?",
+                "Return this adapter to normal desktop Wi-Fi use?",
+                QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel) == QMessageBox::Yes)
+                m_client.UndoDedicatedAdapter();
+            return;
+        }
+        if (m_hasDedicatedAdapter)
+        {
+            QMessageBox::information(this, "Dedicated adapter already configured",
+                "Barista supports one dedicated adapter. Undo the existing one before choosing another.");
+            return;
+        }
+        QMessageBox warning(QMessageBox::Warning, "Create dedicated adapter?",
+            "This Wi-Fi adapter will be reserved for Barista until you undo this setting.",
+            QMessageBox::NoButton, this);
+        warning.setInformativeText("Any active Wi-Fi connection on this adapter will be refused to protect your network access. Other adapters are unaffected.");
+        auto* create = warning.addButton("Create dedicated adapter", QMessageBox::AcceptRole);
+        auto* cancel = warning.addButton(QMessageBox::Cancel);
+        warning.setDefaultButton(cancel);
+        warning.exec();
+        if (warning.clickedButton() == create)
+            m_client.CreateDedicatedAdapter(InterfaceName(m_interface));
     });
     describe();
 
@@ -1029,6 +1066,17 @@ Window::Window(bool smokeTest)
     if (!smokeTest) m_tray->show();
 
     connect(&m_client,&ControlClient::Status,this,&Window::ApplyStatus);
+    connect(&m_client, &ControlClient::DedicatedAdapter, this,
+        [this](bool configured, bool selected, bool present, bool active) {
+            Q_UNUSED(active);
+            m_hasDedicatedAdapter = configured;
+            m_selectedAdapterDedicated = selected;
+            m_dedicatedState->setText(selected ? "Dedicated" :
+                configured ? "Another adapter is Dedicated" : "Available for normal desktop use");
+            m_dedicatedAdapter->setText(selected ? "Undo dedicated adapter" : "Create dedicated adapter");
+            m_dedicatedAdapter->setEnabled(!m_pending && (!configured || selected));
+            if (selected && !present) m_dedicatedState->setText("Dedicated · Adapter not present");
+        });
     connect(&m_client,&ControlClient::GamePads,this,&Window::ApplyGamePads);
     connect(&m_client,&ControlClient::Diagnostics,this,
         [this](const QString& report,const QString& directory,const QStringList& files,const QString& sessionId) {
@@ -1081,6 +1129,7 @@ Window::Window(bool smokeTest)
         });
         timer->start(1000);
         m_client.Refresh();
+        m_client.RefreshDedicatedAdapter(InterfaceName(m_interface));
     }
 }
 
@@ -1189,11 +1238,16 @@ bool Window::ConfirmWifi(bool pairing, const QString& interface)
         m_message->setText("Choose a valid Wi-Fi adapter first."); m_message->show(); return false;
     }
     QMessageBox warning(QMessageBox::Warning, pairing ? "Pair your GamePad?" : "Start Barista?",
-        QString("Barista will take over Wi-Fi adapter %1 for your GamePad. Internet access through this adapter will be interrupted. Use Ethernet or another Wi-Fi adapter to stay online.")
-            .arg(interface), QMessageBox::NoButton, this);
+        m_selectedAdapterDedicated
+            ? QString("Barista will use dedicated Wi-Fi adapter %1 for your GamePad. Other network connections remain available.").arg(interface)
+            : QString("Barista will take over Wi-Fi adapter %1 for your GamePad. Internet access through this adapter will be interrupted. Use Ethernet or another Wi-Fi adapter to stay online.").arg(interface),
+        QMessageBox::NoButton, this);
     QString information = pairing
-        ? "This can replace your saved pairing and disconnect the GamePad from its Wii U. Stop releases the adapter; you may need to reconnect to your Wi-Fi network."
-        : "Stop releases the adapter; you may need to reconnect to your Wi-Fi network. Barista starts NetworkManager and loads controller support if needed. Your desktop may ask for permission.";
+        ? "This can replace your saved pairing and disconnect the GamePad from its Wii U."
+        : "Barista starts required system support if needed. Your desktop may ask for permission.";
+    information += m_selectedAdapterDedicated
+        ? " Stop keeps this adapter reserved for Barista."
+        : " Stop releases the adapter; you may need to reconnect to your Wi-Fi network.";
     const QString country = m_country->text().trimmed().toUpper();
     if (!country.isEmpty())
         information += QString(" If the system is using the world regulatory domain, Barista will temporarily apply %1 system-wide and restore the prior setting when this session stops. Confirm %1 matches your physical location.").arg(country);

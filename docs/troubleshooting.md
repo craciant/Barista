@@ -49,5 +49,9 @@ Two host settings produce failures that look like Barista faults:
   dropped locally. Allow inbound UDP on the GamePad interface for port 67 and
   the runtime ports 50010 and 50020-50025.
 
+That host-firewall exception applies to ordinary adapters. A **Dedicated**
+adapter runs the GamePad network in an isolated session environment, so these
+ports should not be opened on the host LAN for a dedicated session.
+
 Shareable logs are stored in `/var/log/barista/support`. Detailed private logs
 are stored in `/var/log/barista/private` and remain root-only.

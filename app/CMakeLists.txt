@@ -11,6 +11,14 @@ if(BARISTA_BUILD_ENGINE)
     target_compile_features(drcctl PRIVATE cxx_std_20)
 endif()
 
+if(BUILD_TESTING AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    add_executable(barista_dedicated_adapter_test service/dedicated_adapter_test.cpp
+        service/dedicated_adapter.cpp service/dedicated_adapter.h)
+    target_include_directories(barista_dedicated_adapter_test PRIVATE "${PROJECT_SOURCE_DIR}/core")
+    target_compile_features(barista_dedicated_adapter_test PRIVATE cxx_std_20)
+    add_test(NAME barista_dedicated_adapter COMMAND barista_dedicated_adapter_test)
+endif()
+
 if(NOT BARISTA_BUILD_DESKTOP)
     return()
 endif()
@@ -57,6 +65,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         file(REAL_PATH "${BARISTA_MODPROBE_DIR}" BARISTA_MODPROBE_DIR)
         get_filename_component(BARISTA_MODPROBE_NAME "${BARISTA_MODPROBE}" NAME)
         add_executable(barista-service service/main.cpp service/service.cpp service/service.h
+            service/dedicated_adapter.cpp service/dedicated_adapter.h
             service/log_sanitizer.cpp service/log_sanitizer.h
             branding/idle_screen.cpp
             service/uinput_output.cpp service/uinput_output.h)

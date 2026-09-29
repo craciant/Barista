@@ -184,6 +184,7 @@ Service::Service(QObject* parent) : QObject(parent)
         m_errorCode = "ENGINE_START_FAILED";
         RecordDiagnostic(m_errorCode, "service", QString("process_error=%1").arg(static_cast<int>(error)));
         if (error == QProcess::FailedToStart) {
+            LeaveDedicatedNamespace();
             m_controller.Stop(); m_input.reset(); m_owner.clear(); m_phase = "idle"; m_connected = false;
             CloseSupportRun();
         }
@@ -191,6 +192,7 @@ Service::Service(QObject* parent) : QObject(parent)
     connect(&m_worker, qOverload<int,QProcess::ExitStatus>(&QProcess::finished), this,
         [this](int code, QProcess::ExitStatus exitStatus) {
         ProcessWorkerOutput();
+        LeaveDedicatedNamespace();
         m_controller.Stop(); m_input.reset(); m_connected = false; m_phase = "idle";
         if (!m_stopping) {
             m_error = QString("Radio engine exited unexpectedly (%1)").arg(code);
@@ -271,7 +273,7 @@ barista::api::SessionStatus Service::Status(bool ownedByCaller) const
     if (ownedByCaller && m_mode == barista::api::SessionMode::Real)
         status.mediaEndpoint = m_endpoint.toStdString();
 
-    for (const auto* tool : {"iw", "ip", "nmcli"})
+    for (const auto* tool : {"iw", "ip", "nmcli", "ethtool"})
     {
         if (QStandardPaths::findExecutable(tool,{"/usr/sbin","/usr/bin","/sbin","/bin"}).isEmpty())
             status.health.missingTools.emplace_back(tool);
@@ -335,6 +337,37 @@ QVariantMap Service::GetStatus()
         {"engineInstalled",status.health.engineInstalled}, {"hostapdInstalled",status.health.hostapdInstalled},
         {"authorizationInstalled",status.health.authorizationInstalled},
         {"missingTools",missingTools}, {"legacySessionPresent",status.health.legacySessionPresent}};
+}
+
+QVariantMap Service::DedicatedAdapterStatus(const QString& interface)
+{
+    const auto state = m_dedicatedAdapters.State();
+    const bool selected = !interface.isEmpty() && m_dedicatedAdapters.Matches(interface.toStdString());
+    return {{"configured", !state.permanentMac.empty()}, {"selected", selected},
+        {"present", selected || (!state.permanentMac.empty() && !m_dedicatedAdapters.PermanentMac(interface.toStdString()).empty())},
+        {"active", m_worker.state() != QProcess::NotRunning && selected}};
+}
+
+void Service::CreateDedicatedAdapter(const QString& interface)
+{
+    Authorize([this, interface](uint, const QString&) -> QString {
+        if (m_worker.state() != QProcess::NotRunning)
+            return "Stop the current GamePad session before changing the dedicated adapter.";
+        if (!barista::api::ValidInterfaceName(interface.toStdString()) ||
+            !QFileInfo::exists("/sys/class/net/" + interface + "/phy80211"))
+            return "Choose an existing wireless adapter.";
+        return QString::fromStdString(m_dedicatedAdapters.Create(interface.toStdString()));
+    });
+}
+
+void Service::UndoDedicatedAdapter()
+{
+    Authorize([this](uint, const QString&) -> QString {
+        if (m_worker.state() != QProcess::NotRunning)
+            return "Stop the current GamePad session before undoing the dedicated adapter.";
+        LeaveDedicatedNamespace();
+        return QString::fromStdString(m_dedicatedAdapters.Undo());
+    });
 }
 
 QVariantMap Service::GetDiagnostics()
@@ -814,8 +847,58 @@ QString Service::Start(const QString& interface, barista::api::SessionMode mode,
     m_worker.setWorkingDirectory("/var/lib/barista");
     m_workerOutput.clear();
     m_phase = "starting";
-    m_worker.start(BARISTA_WORKER,args);
+    m_dedicatedSession = m_dedicatedAdapters.Matches(interface.toStdString());
+    if (m_dedicatedSession)
+    {
+        const QString namespaceError = EnterDedicatedNamespace(interface);
+        if (!namespaceError.isEmpty())
+        {
+            m_owner.clear(); m_phase = "idle"; CloseSupportRun();
+            return namespaceError;
+        }
+        env.insert("DRCD_DEDICATED_ADAPTER", "1");
+        m_worker.setProcessEnvironment(env);
+        const QString ip = QStandardPaths::findExecutable("ip", {"/usr/sbin", "/usr/bin", "/sbin", "/bin"});
+        args.prepend(BARISTA_WORKER);
+        args.prepend(m_networkNamespace);
+        args.prepend("exec");
+        args.prepend("netns");
+        m_worker.start(ip, args);
+    }
+    else
+        m_worker.start(BARISTA_WORKER,args);
     return {};
+}
+
+QString Service::EnterDedicatedNamespace(const QString& interface)
+{
+    const QString ip = QStandardPaths::findExecutable("ip", {"/usr/sbin", "/usr/bin", "/sbin", "/bin"});
+    if (ip.isEmpty() || !TrustedExecutable(ip)) return "The trusted network setup helper is unavailable.";
+    m_networkNamespace = "barista-" + m_sessionId.left(8).toLower();
+    if (QProcess::execute(ip, {"netns", "add", m_networkNamespace}) != 0)
+    {
+        m_networkNamespace.clear();
+        return "Could not prepare the isolated GamePad network.";
+    }
+    if (QProcess::execute(ip, {"link", "set", interface, "netns", m_networkNamespace}) != 0)
+    {
+        QProcess::execute(ip, {"netns", "delete", m_networkNamespace});
+        m_networkNamespace.clear();
+        return "Could not move the dedicated adapter into the GamePad network.";
+    }
+    QProcess::execute(ip, {"netns", "exec", m_networkNamespace, "ip", "link", "set", "lo", "up"});
+    return {};
+}
+
+void Service::LeaveDedicatedNamespace()
+{
+    if (m_networkNamespace.isEmpty()) { m_dedicatedSession = false; return; }
+    const QString ip = QStandardPaths::findExecutable("ip", {"/usr/sbin", "/usr/bin", "/sbin", "/bin"});
+    if (!ip.isEmpty() && barista::api::ValidInterfaceName(m_interface.toStdString()))
+        QProcess::execute(ip, {"netns", "exec", m_networkNamespace, "ip", "link", "set", m_interface, "netns", "1"});
+    if (!ip.isEmpty()) QProcess::execute(ip, {"netns", "delete", m_networkNamespace});
+    m_networkNamespace.clear();
+    m_dedicatedSession = false;
 }
 void Service::StopWorker()
 {

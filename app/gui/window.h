@@ -58,6 +58,8 @@ private:
     std::array<QLabel*,4> m_pairSymbolLabels{};
     QWidget* m_pairSymbols;
     QPushButton *m_start, *m_stop, *m_pair, *m_copy, *m_prepare;
+    QPushButton* m_dedicatedAdapter;
+    QLabel* m_dedicatedState;
     QPushButton *m_screenMode, *m_controllerMode;
     QPushButton* m_waitingStop;
     QPushButton *m_renamePair, *m_removePair;
@@ -75,4 +77,5 @@ private:
     bool m_pairingRequested = false;
     bool m_smokeTest = false, m_backgroundNotice = false;
     bool m_quitting = false;
+    bool m_hasDedicatedAdapter = false, m_selectedAdapterDedicated = false;
 };

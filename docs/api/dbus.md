@@ -26,10 +26,13 @@ must remain unprivileged.
 | `PairWithCountry` | `interface: string`, `code: string`, `mode: string`, `regulatoryCountry: string` | Empty on completion |
 | `StopSession` | none | Empty on completion |
 | `PrepareSystem` | none | Empty on completion |
+| `DedicatedAdapterStatus` | `interface: string` | Map containing `configured`, `selected`, `present`, and `active` booleans |
+| `CreateDedicatedAdapter` | `interface: string` | Empty on completion |
+| `UndoDedicatedAdapter` | none | Empty on completion |
 | `RenameGamePad` | `mac: string`, `name: string` | Empty |
 | `RemoveGamePad` | `mac: string` | Empty |
 
-The session, pairing, stop, and preparation methods use PolicyKit and may
+The session, pairing, stop, preparation, create-dedicated, and undo-dedicated methods use PolicyKit and may
 hold the D-Bus reply while user authorization or setup completes. The bundled
 Qt client allows 150 seconds for mutations and 25 seconds for reads; those are
 client policy, not wire-level guarantees.
@@ -118,6 +121,12 @@ The system-bus policy permits clients to send requests, but privileged methods
 independently verify the caller and authorize the PolicyKit action. The service
 binds session ownership and the media socket to that caller's UID. It does not
 pass pairing keys or privileged radio access to the GUI.
+
+Dedicated-adapter state is owned by the service and identified by the adapter's
+permanent MAC address. `DedicatedAdapterStatus` is read-only. Creation refuses
+an adapter carrying an active connection or default route. The mutation methods
+never ask the desktop client to write system configuration or manipulate Linux
+networking directly.
 
 ## Command-line inspection
 

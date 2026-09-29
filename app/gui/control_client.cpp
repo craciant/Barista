@@ -174,6 +174,36 @@ void ControlClient::RefreshDiagnostics()
     emit Diagnostics({}, {}, {}, {});
 #endif
 }
+void ControlClient::RefreshDedicatedAdapter(const QString& interfaceName)
+{
+    m_dedicatedInterface = interfaceName;
+#ifdef BARISTA_LINUX_CONTROL
+    auto message = QDBusMessage::createMethodCall(
+        "org.barista.Service1", "/org/barista/Service1", "org.barista.Service1", "DedicatedAdapterStatus");
+    message.setArguments({interfaceName});
+    message.setAutoStartService(true);
+    auto* watcher = new QDBusPendingCallWatcher(QDBusConnection::systemBus().asyncCall(message, 25000), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this](auto* completed) {
+        const QDBusPendingReply<QVariantMap> reply = *completed;
+        if (!reply.isError())
+        {
+            const auto value = reply.value();
+            emit DedicatedAdapter(value.value("configured").toBool(), value.value("selected").toBool(),
+                value.value("present").toBool(), value.value("active").toBool());
+        }
+        completed->deleteLater();
+    });
+#else
+    Q_UNUSED(interfaceName);
+    emit DedicatedAdapter(false, false, false, false);
+#endif
+}
+void ControlClient::CreateDedicatedAdapter(const QString& interfaceName)
+{
+    m_dedicatedInterface = interfaceName;
+    Call("CreateDedicatedAdapter", {interfaceName});
+}
+void ControlClient::UndoDedicatedAdapter() { Call("UndoDedicatedAdapter"); }
 void ControlClient::Stop()
 {
     if (m_operationPending) { m_stopAfterOperation = true; return; }
@@ -213,6 +243,8 @@ void ControlClient::Call(const QString& method, const QVariantList& arguments)
             if (method == "StopSession") emit Stopped(success);
             if (success && (method == "RenameGamePad" || method == "RemoveGamePad"))
                 RefreshGamePads();
+            if (success && (method == "CreateDedicatedAdapter" || method == "UndoDedicatedAdapter"))
+                RefreshDedicatedAdapter(m_dedicatedInterface);
             if (m_stopAfterOperation) {
                 m_stopAfterOperation = false;
                 QTimer::singleShot(0, this, &ControlClient::Stop);

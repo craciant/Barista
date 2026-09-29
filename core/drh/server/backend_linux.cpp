@@ -3,6 +3,7 @@
 #include "drh/encoder/media_streamer.h"
 #include "drh/server/session_backend.h"
 #include "drh/server/wifi_capabilities.h"
+#include "drh/server/network_manager_policy.h"
 
 #include "drh/pairing.h"
 #include "drh/runtime_transport.h"
@@ -688,6 +689,7 @@ public:
 		, m_pair_channel_list_override(ReadEnvOrDefault("DRCD_PAIR_CHANNEL_LIST", ""))
 		, m_pair_channel_dwell_ms(std::clamp(ParseIntEnv("DRCD_PAIR_CHANNEL_DWELL_MS", 20000), 1000, 60000))
 		, m_wps_pin_timeout_seconds(std::clamp(ParseIntEnv("DRCD_WPS_PIN_TIMEOUT", kDefaultWpsPinTimeoutSeconds), 1, kMaxWpsPinTimeoutSeconds))
+		, m_dedicated_adapter(ParseBoolEnv("DRCD_DEDICATED_ADAPTER", false))
 	{
 		if (m_channel <= 0)
 			m_channel = 36;
@@ -1864,7 +1866,11 @@ private:
 
 		bool network_manager_released = false;
 		std::string nm_detail;
-		if (SetNetworkManagerManaged(m_ap_interface, false, nm_detail))
+		if (!ShouldManageAdapterWithNetworkManager(m_dedicated_adapter))
+		{
+			Log("interface-prep: dedicated adapter is already reserved from NetworkManager");
+		}
+		else if (SetNetworkManagerManaged(m_ap_interface, false, nm_detail))
 		{
 			network_manager_released = true;
 			m_network_manager_claimed = true;
@@ -2049,7 +2055,7 @@ private:
 		}
 
 		close(fd);
-		if (m_network_manager_claimed)
+		if (m_network_manager_claimed && ShouldManageAdapterWithNetworkManager(m_dedicated_adapter))
 		{
 			std::string nm_detail;
 			if (!SetNetworkManagerManaged(m_base_interface, true, nm_detail))
@@ -2925,6 +2931,7 @@ private:
 	std::string m_ap_interface;
 	SavedInterfaceState m_saved_interface;
 	bool m_network_manager_claimed = false;
+	bool m_dedicated_adapter = false;
 	bool m_tsf_monitor_created = false;
 	bool m_per_tid_rts_enabled = false;
 	bool m_global_rts_enabled = false;

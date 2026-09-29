@@ -18,6 +18,13 @@ work; it is not a guarantee for every firmware, kernel, access-point channel,
 or adapter. macOS and Windows currently provide the portable UI/core only—the
 real GamePad radio backend is Linux-only.
 
+On Linux, Settings can permanently reserve one adapter for Barista with
+**Create dedicated adapter**. Barista refuses an adapter carrying an active
+desktop connection, so connect through Ethernet or another Wi-Fi adapter first.
+The adapter is marked **Dedicated** until **Undo dedicated adapter** is used.
+During a session its GamePad network is isolated from the desktop's network, so
+a home LAN using `192.168.1.0/24` can remain connected at the same time.
+
 The [TP-Link Nano AC600](https://www.amazon.com/dp/B07PB1X4CN) USB adapter
 (`rtw_8821au`) is also a recommended tested option. It can take several
 seconds to leave managed Wi-Fi mode and bring up the pairing access point;

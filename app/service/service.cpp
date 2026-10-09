@@ -1,5 +1,6 @@
 #include "service.h"
 #include "log_sanitizer.h"
+#include "appliance.h"
 #include "../branding/idle_screen.h"
 #include "api/diagnostics.h"
 #include "api/controller.h"
@@ -334,7 +335,9 @@ QVariantMap Service::GetStatus()
         {"polkitRunning",status.health.authorizationRunning},
         {"engineInstalled",status.health.engineInstalled}, {"hostapdInstalled",status.health.hostapdInstalled},
         {"authorizationInstalled",status.health.authorizationInstalled},
-        {"missingTools",missingTools}, {"legacySessionPresent",status.health.legacySessionPresent}};
+        {"missingTools",missingTools}, {"legacySessionPresent",status.health.legacySessionPresent},
+        {"applianceAdapter",barista::appliance::ConfiguredRadio().permanentMac.isEmpty() ? QString() : barista::appliance::ConfiguredRadio().interfaceName},
+        {"applianceMac",barista::appliance::ConfiguredRadio().permanentMac}};
 }
 
 QVariantMap Service::GetDiagnostics()
@@ -673,6 +676,16 @@ void Service::PairWithCountry(const QString& interface, const QString& code, con
         });
     });
 }
+void Service::SetApplianceAdapter(const QString& interface, bool enabled)
+{
+    AuthorizeAsync([this,interface,enabled](uint,const QString&,Completion done) {
+        if (m_worker.state() != QProcess::NotRunning) {
+            done("Stop the current GamePad session before changing appliance mode"); return;
+        }
+        const QString error = enabled ? barista::appliance::Enable(interface) : barista::appliance::Disable();
+        done(error);
+    });
+}
 void Service::PrepareSystem()
 {
     AuthorizeAsync([this](uint,const QString& caller,Completion done) {
@@ -814,7 +827,23 @@ QString Service::Start(const QString& interface, barista::api::SessionMode mode,
     m_worker.setWorkingDirectory("/var/lib/barista");
     m_workerOutput.clear();
     m_phase = "starting";
-    m_worker.start(BARISTA_WORKER,args);
+    if (barista::appliance::Matches(interface)) {
+        if (!TrustedExecutable(BARISTA_APPLIANCE_SESSION)) {
+            m_owner.clear(); m_phase = "idle"; CloseSupportRun();
+            return "Install the trusted Barista appliance session wrapper first";
+        }
+        env.insert("DRCD_APPLIANCE_MODE","1");
+        m_worker.setProcessEnvironment(env);
+        args.prepend(BARISTA_WORKER);
+        args.prepend(interface);
+        m_worker.start(BARISTA_APPLIANCE_SESSION,args);
+    } else {
+        if (!barista::appliance::ConfiguredRadio().permanentMac.isEmpty()) {
+            m_owner.clear(); m_phase = "idle"; CloseSupportRun();
+            return "Select the configured appliance radio, or undo appliance mode first";
+        }
+        m_worker.start(BARISTA_WORKER,args);
+    }
     return {};
 }
 void Service::StopWorker()

@@ -52,12 +52,16 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         find_program(BARISTA_PKCHECK pkcheck REQUIRED)
         find_program(BARISTA_MODPROBE modprobe REQUIRED)
         find_program(BARISTA_SYSTEMCTL systemctl REQUIRED)
+        find_program(BARISTA_NMCLI nmcli REQUIRED)
+        find_program(BARISTA_IP ip REQUIRED)
+        find_program(BARISTA_IW iw REQUIRED)
         # Resolve directory aliases, retaining modprobe's name for kmod dispatch.
         get_filename_component(BARISTA_MODPROBE_DIR "${BARISTA_MODPROBE}" DIRECTORY)
         file(REAL_PATH "${BARISTA_MODPROBE_DIR}" BARISTA_MODPROBE_DIR)
         get_filename_component(BARISTA_MODPROBE_NAME "${BARISTA_MODPROBE}" NAME)
         add_executable(barista-service service/main.cpp service/service.cpp service/service.h
             service/log_sanitizer.cpp service/log_sanitizer.h
+            service/appliance.cpp service/appliance.h
             branding/idle_screen.cpp
             service/uinput_output.cpp service/uinput_output.h)
         qt_add_resources(barista-service service_branding PREFIX "/barista" BASE "${PROJECT_SOURCE_DIR}"
@@ -79,8 +83,11 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
             BARISTA_HOSTAPD="${CMAKE_INSTALL_FULL_LIBEXECDIR}/barista/barista-hostapd"
             BARISTA_PKCHECK="${BARISTA_PKCHECK}"
             BARISTA_MODPROBE="${BARISTA_MODPROBE_DIR}/${BARISTA_MODPROBE_NAME}"
-            BARISTA_SYSTEMCTL="${BARISTA_SYSTEMCTL}")
+            BARISTA_SYSTEMCTL="${BARISTA_SYSTEMCTL}"
+            BARISTA_NMCLI="${BARISTA_NMCLI}"
+            BARISTA_APPLIANCE_SESSION="${CMAKE_INSTALL_FULL_LIBEXECDIR}/barista/barista-appliance-session")
         install(TARGETS barista-service RUNTIME DESTINATION ${CMAKE_INSTALL_LIBEXECDIR}/barista)
+        install(PROGRAMS ../packaging/linux/barista-appliance-session.sh DESTINATION ${CMAKE_INSTALL_LIBEXECDIR}/barista RENAME barista-appliance-session)
         install(PROGRAMS $<TARGET_FILE:drcd> DESTINATION ${CMAKE_INSTALL_LIBEXECDIR}/barista RENAME barista-engine)
         install(PROGRAMS "${DRC_HOSTAPD_BINARY}" DESTINATION ${CMAKE_INSTALL_LIBEXECDIR}/barista RENAME barista-hostapd)
         configure_file(../packaging/linux/barista.service.in barista.service @ONLY)

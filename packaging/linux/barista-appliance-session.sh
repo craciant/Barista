@@ -45,6 +45,7 @@ trap on_term TERM INT
 ip netns add "$ns" || exit 1
 created=yes
 # Wireless PHYs, unlike ordinary Ethernet interfaces, must be moved with iw.
+ip link set "$iface" down || exit 1
 iw phy "$phy" set netns name "$ns" || exit 1
 moved=yes
 ip netns exec "$ns" "$engine" "$@" &

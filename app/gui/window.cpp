@@ -979,6 +979,7 @@ Window::Window(bool smokeTest)
             QMessageBox::Yes | QMessageBox::Cancel,QMessageBox::Cancel) != QMessageBox::Yes) {
             m_appliance->setChecked(true); return;
         }
+        if (enabled) QSettings().setValue("interface",InterfaceName(m_interface));
         m_client.SetApplianceAdapter(InterfaceName(m_interface),enabled);
     });
     connect(m_interface,&QComboBox::currentTextChanged,this,[this] {

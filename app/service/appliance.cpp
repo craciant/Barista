@@ -42,6 +42,8 @@ bool Save(const QString& data)
 {
     QSaveFile file(QString::fromLatin1(ConfigFile));
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) return false;
+    file.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner |
+        QFileDevice::ReadGroup | QFileDevice::ReadOther);
     if (file.write(data.toUtf8()) != data.toUtf8().size()) return false;
     return file.commit();
 }

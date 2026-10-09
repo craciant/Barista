@@ -63,6 +63,7 @@ private:
     QPushButton *m_renamePair, *m_removePair;
     QPushButton *m_viewLog, *m_openLogs, *m_copyDiagnostics, *m_saveDiagnostics;
     QCheckBox* m_background;
+    QCheckBox* m_appliance = nullptr;
     QSystemTrayIcon* m_tray;
     QAction *m_trayStart, *m_trayStop;
     QListWidget* m_savedGamePads;

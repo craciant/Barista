@@ -171,6 +171,8 @@ struct GamePad
 
 struct SessionStatus
 {
+    std::string applianceAdapter;
+    std::string applianceMac;
     uint32_t apiVersion = ApiVersion;
     std::string serviceVersion;
     bool available = false;

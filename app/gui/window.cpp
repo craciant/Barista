@@ -501,6 +501,9 @@ Window::Window(bool smokeTest)
             m_interface->addItem(AdapterLabel(interface.name()),interface.name());
     if (!m_interface->count()) m_interface->addItem("wlan0","wlan0");
     settingsForm->addRow("GamePad &adapter:",m_interface);
+    m_appliance = new QCheckBox("Appliance mode — reserve this adapter exclusively for Barista",settingsPage);
+    m_appliance->setObjectName("applianceModeCheck");
+    settingsForm->addRow(QString(),m_appliance);
     m_country = new QLineEdit(settingsPage);
     m_country->setObjectName("regulatoryCountry");
     m_country->setMaxLength(2);
@@ -508,6 +511,7 @@ Window::Window(bool smokeTest)
     m_country->setPlaceholderText("System setting");
     settingsForm->addRow("&Country:",m_country);
     settingsLayout->addLayout(settingsForm);
+    settingsLayout->addWidget(FormHint("Appliance mode reserves a single Wi-Fi card across reboots and runs its radio session in a separate network namespace. Stop the session before changing this setting. You can undo the reservation here.",settingsPage));
     settingsLayout->addWidget(FormHint("Use your physical country's two-letter code. Temporary radio settings are restored when the session ends.",settingsPage));
     connect(m_country,&QLineEdit::textEdited,this,[this](const QString& value) {
         m_country->setText(value.toUpper());
@@ -969,6 +973,15 @@ Window::Window(bool smokeTest)
             : "PC controller input. Touch, motion, and rumble are unavailable.");
     };
     connect(m_mode,qOverload<int>(&QComboBox::currentIndexChanged),this,[describe](int) { describe(); });
+    connect(m_appliance,&QCheckBox::clicked,this,[this](bool enabled) {
+        if (!enabled && QMessageBox::question(this,"Release dedicated adapter?",
+            "Return the dedicated Wi-Fi adapter to Fedora NetworkManager?",
+            QMessageBox::Yes | QMessageBox::Cancel,QMessageBox::Cancel) != QMessageBox::Yes) {
+            m_appliance->setChecked(true); return;
+        }
+        if (enabled) QSettings().setValue("interface",InterfaceName(m_interface));
+        m_client.SetApplianceAdapter(InterfaceName(m_interface),enabled);
+    });
     connect(m_interface,&QComboBox::currentTextChanged,this,[this] {
         ApplyStatus(m_lastStatus);
     });
@@ -1533,7 +1546,11 @@ void Window::ApplyStatus(const barista::api::SessionStatus& status)
         missing.push_back(QString::fromStdString(tool));
     m_health["tools"]->setText(!available ? "Not checked" : missing.isEmpty() ? "Ready" : "Missing: " + missing.join(", "));
     SetTone(m_health["tools"],!available ? Tone::Neutral : missing.isEmpty() ? Tone::Good : Tone::Bad);
-    m_interface->setEnabled(!running && !busy);
+    m_interface->setEnabled(!running && !busy && status.applianceMac.empty());
+    m_appliance->blockSignals(true);
+    m_appliance->setChecked(!status.applianceMac.empty());
+    m_appliance->blockSignals(false);
+    m_appliance->setEnabled(available && !running && !busy);
     m_mode->setEnabled(!running && !busy);
     m_screenMode->setEnabled(!running && !busy);
     m_controllerMode->setEnabled(!running && !busy);

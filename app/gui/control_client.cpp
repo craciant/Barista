@@ -63,6 +63,8 @@ barista::api::SessionStatus DecodeStatus(const QVariantMap& value)
     if (value.value("batteryAvailable").toBool())
         status.batteryPercent = static_cast<uint8_t>(value.value("battery").toUInt());
     status.interfaceName = value.value("interface").toString().toStdString();
+    status.applianceAdapter = value.value("applianceAdapter").toString().toStdString();
+    status.applianceMac = value.value("applianceMac").toString().toStdString();
     status.ownedByCaller = value.value("ownedByCaller").toBool();
     status.busy = value.value("busy").toBool();
     status.mediaEndpoint = value.value("mediaEndpoint").toString().toStdString();
@@ -97,6 +99,10 @@ barista::api::SessionStatus DecodeStatus(const QVariantMap& value)
 void ControlClient::Refresh() { if (!m_pollPending && QDateTime::currentMSecsSinceEpoch() >= m_nextRetry) Call("GetStatus"); }
 void ControlClient::Retry() { m_nextRetry = 0; Refresh(); }
 void ControlClient::Prepare() { Call("PrepareSystem"); }
+void ControlClient::SetApplianceAdapter(const QString& interface, bool enabled)
+{
+    Call("SetApplianceAdapter", {interface,enabled});
+}
 void ControlClient::Start(const barista::api::StartSessionRequest& request)
 {
     Call("StartSessionWithCountry", {QString::fromStdString(request.interfaceName),

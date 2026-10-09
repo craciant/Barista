@@ -1864,10 +1864,10 @@ private:
 
 		bool network_manager_released = false;
 		std::string nm_detail;
-		if (SetNetworkManagerManaged(m_ap_interface, false, nm_detail))
+		if (std::getenv("DRCD_APPLIANCE_MODE") != nullptr || SetNetworkManagerManaged(m_ap_interface, false, nm_detail))
 		{
 			network_manager_released = true;
-			m_network_manager_claimed = true;
+			m_network_manager_claimed = std::getenv("DRCD_APPLIANCE_MODE") == nullptr;
 			Log("interface-prep: NetworkManager released " + m_ap_interface);
 			QueueStatus("Wi-Fi interface reserved for GamePad hosting");
 			std::this_thread::sleep_for(std::chrono::milliseconds(250));

@@ -14,6 +14,7 @@ public:
     void Pair(const barista::api::PairRequest& request);
     void Stop();
     void Prepare();
+    void SetApplianceAdapter(const QString& interface, bool enabled);
     void Retry();
     void RefreshGamePads();
     void RefreshDiagnostics();

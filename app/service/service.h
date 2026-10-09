@@ -33,6 +33,7 @@ public slots:
     void PairWithCountry(const QString& interface, const QString& code, const QString& mode, const QString& regulatoryCountry);
     void StopSession();
     void PrepareSystem();
+    void SetApplianceAdapter(const QString& interface, bool enabled);
 private:
     using Completion = std::function<void(QString)>;
     std::vector<barista::api::GamePad> GamePads() const;
